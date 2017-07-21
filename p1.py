@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
+import random
+
 #%matplotlib inline
 #plt.ion()
 
@@ -168,20 +170,36 @@ def dist_point_line(x1, y1, x2, y2, px, py):
 def line_sse(x1, y1, x2, y2, points_x, points_y):
     zipped = zip(points_x, points_y)
     sse = 0.0
+    random.seed()
+    i = 0
     for x, y in zipped:
-        sse += pow(dist_point_line(x1, y1, x2, y2, x, y), 2.0)
-    return sse
+        if (random.randint(0,4) < 4):
+            sse += pow(dist_point_line(x1, y1, x2, y2, x, y), 2.0)
+            i += 1
+    if (i == 0):
+        i = 1
+    return sse/i
 
 def best_line(points_x, points_y):
-    zipped = zip(points_x, points_y)
-    best_sse = 1e6
+    """
+    Return the best line segment using the minimum of the sum of squared error.
+    This function uses an unconventional C like interrator.
+    """
+    best_sse = 1e8
     best_line = []
-    list(zipped)
-    for x1,y1,x2,y2 in zipped:
+    i = 0
+    while i < len(points_x):
+        x1 = points_x[i]
+        x2 = points_x[i+1]
+        y1 = points_y[i]
+        y2 = points_y[i+1]
+        if (i == 0):
+            best_line = [x1, y1, x2, y2]
         sse = line_sse(x1, y1, x2, y2, points_x, points_y)
         if (sse < best_sse):
             best_sse = sse
             best_line = [x1, y1, x2, y2]
+        i+=2
     return best_line
 
 def get_best_line(m, b, miny, tic, points_x, points_y):
@@ -194,7 +212,17 @@ def get_best_line(m, b, miny, tic, points_x, points_y):
         return (0.0, 0.0, 0.0)
     return (m, b, miny)
 
+def filter_best_line(m, b, miny, nm, nb, nminy, rate):
+    m = m * (1.0-rate) + nm * rate
+    b = b * (1.0-rate) + nb * rate
+    miny = miny * (1.0-rate/3) + nminy * rate/3
+    return (m, b, miny)
+
 def fit_filter_line(m, b, miny, tic, rate, points_x, points_y):
+    """
+    Fit a line using least squares and low pass filter the result.
+    Returns the new slope (m), y-intercept (b), and draw height (miny).
+    """
     if len(points_x) >= 2:
         z = np.polyfit(points_x,points_y,1)
         if (tic == 0):
@@ -234,27 +262,39 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
     ly = []
     for line in lines:
         for x1,y1,x2,y2 in line:
-            if ((y2-y1)/(x2-x1) > 0):
-                rx.append(x1)
-                ry.append(y1)
-                rx.append(x2)
-                ry.append(y2)
-            else:
-                lx.append(x1)
-                ly.append(y1)
-                lx.append(x2)
-                ly.append(y2)
+            if abs(x2-x1) > 0:
+                m = (y2-y1)/(x2-x1)
+                absm = abs(m)
+                if (m > 0):
+                    if (absm > 0.1 and absm < 0.9):
+                        rx.append(x1)
+                        ry.append(y1)
+                        rx.append(x2)
+                        ry.append(y2)
+                else:
+                    if (absm > 0.1 and absm < 0.9):
+                        lx.append(x1)
+                        ly.append(y1)
+                        lx.append(x2)
+                        ly.append(y2)
             # draw the detected hough lines green
             cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
     
     # Fit, Filter and draw right lane
     #(dash.rm, dash.rb, dash.minry) = fit_filter_line(dash.rm, dash.rb, dash.minry, dash.rtic, rate, rx, ry)
-    (dash.rm, dash.rb, dash.minry) = get_best_line(dash.rm, dash.rb, dash.minry, dash.rtic, rx, ry)
+    (m, b, minry) = get_best_line(dash.rm, dash.rb, dash.minry, dash.rtic, rx, ry)
+    if dash.rtic > 0:
+        (dash.rm, dash.rb, dash.minry) = filter_best_line(dash.rm, dash.rb, dash.minry, m, b, minry, rate)
+    else:
+        (dash.rm, dash.rb, dash.minry) = (m, b, minry)
     if (dash.rm != 0.0):
         m = dash.rm
         b = dash.rb
         yy1 = img.shape[0]
-        yy2 = int(dash.minry)
+        d = dash.minry
+        if d < dash.minly:
+            d = dash.minly;
+        yy2 = int(img.shape[0]*.6)
         xx1 = int((yy1-b)/m)
         xx2 = int((yy2-b)/m)
         #if (xx1 > 0) and (xx1 < img.shape[1]):
@@ -262,15 +302,22 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
         dash.rtic += 1
 
     # Fit, Filter and draw left lane
-    (dash.lm, dash.lb, dash.minly) = fit_filter_line(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
-    print(lx,ly)
+    #(dash.lm, dash.lb, dash.minly) = fit_filter_line(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
+    (m, b, minly) = get_best_line(dash.lm, dash.lb, dash.minly, dash.ltic, lx, ly)
+    if (dash.ltic > 0):
+        (dash.lm, dash.lb, dash.minly) = filter_best_line(dash.lm, dash.lb, dash.minly, m, b, minly, rate)
+    else:
+        (dash.lm, dash.lb, dash.minly) = (m, b, minly)
+#    print(dash.lm, dash.lb, dash.minly)
     cv2.line
     if (dash.lm != 0.0):
         m = dash.lm
         b = dash.lb
-        minly = dash.minly
+        d = dash.minly
+        if d < dash.minry:
+            d = dash.minry;
         yy1 = img.shape[0]
-        yy2 = int(minly)
+        yy2 = int(img.shape[0]*.6)
         xx1 = int((yy1-b)/m)
         xx2 = int((yy2-b)/m)
         #if (xx1 > 0) and (xx1 < img.shape[1]):
@@ -306,7 +353,7 @@ def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
 
 
 import os
-dirs = os.listdir("test_images_1/")
+dirs = os.listdir("test_images/")
 #explicitly force the printing of dirs when running from command line
 print(dirs)
 
@@ -317,7 +364,7 @@ print(dirs)
 for filename in dirs:
 
     # Read in and grayscale the image
-    image = mpimg.imread("test_images_1/" + filename)
+    image = mpimg.imread("test_images/" + filename)
 
     gray = grayscale(image)
     dash = Dashboard()
@@ -379,8 +426,8 @@ def process_image(image):
     blur_gray = gaussian_blur(gray, kernel_size)
 
     # Define our parameters for Canny and apply
-    low_threshold = 50
-    high_threshold = 150
+    low_threshold = 40
+    high_threshold = 160
     edges = canny(blur_gray, low_threshold, high_threshold)
 
     # Create a masked edges image
@@ -398,7 +445,7 @@ def process_image(image):
     rho = 1 # distance resolution in pixels of the Hough grid
     theta = np.pi/180 # angular resolution in radians of the Hough grid
     threshold = 1     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 20 #minimum number of pixels making up a line
+    min_line_length = 30 #minimum number of pixels making up a line
     max_line_gap = 10    # maximum gap in pixels between connectable line segments
     line_img = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
 
@@ -408,7 +455,7 @@ def process_image(image):
     cv2.line(final_img, (int(imshape[1]*xlow2), int(imshape[0]*ylow)), (imshape[1],imshape[0]), [0, 0, 255], 2)
     return final_img
 
-if 0:
+if 1:
     dash = Dashboard()
     white_output = 'test_videos_output/challenge.mp4'
     ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
@@ -421,14 +468,14 @@ if 0:
     #%time white_clip.write_videofile(white_output, audio=False)
     white_clip.write_videofile(white_output, audio=False)
 
-if 0:
+if 1:
     dash = Dashboard()
     white_output = 'test_videos_output/solidYellowLeft.mp4'
     clip1 = VideoFileClip("test_videos/solidYellowLeft.mp4")
     white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
     white_clip.write_videofile(white_output, audio=False)
 
-if 0:
+if 1:
     dash = Dashboard()
     white_output = 'test_videos_output/solidWhiteRight.mp4'
     clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
