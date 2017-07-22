@@ -260,69 +260,68 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
     ry = []
     lx = []
     ly = []
-    for line in lines:
-        for x1,y1,x2,y2 in line:
-            if abs(x2-x1) > 0:
-                m = (y2-y1)/(x2-x1)
-                absm = abs(m)
-                if (m > 0):
-                    if (absm > 0.1 and absm < 0.9):
-                        rx.append(x1)
-                        ry.append(y1)
-                        rx.append(x2)
-                        ry.append(y2)
-                else:
-                    if (absm > 0.1 and absm < 0.9):
-                        lx.append(x1)
-                        ly.append(y1)
-                        lx.append(x2)
-                        ly.append(y2)
-            # draw the detected hough lines green
-            cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
-    
-    # Fit, Filter and draw right lane
-    #(dash.rm, dash.rb, dash.minry) = fit_filter_line(dash.rm, dash.rb, dash.minry, dash.rtic, rate, rx, ry)
-    (m, b, minry) = get_best_line(dash.rm, dash.rb, dash.minry, dash.rtic, rx, ry)
-    if dash.rtic > 0:
-        (dash.rm, dash.rb, dash.minry) = filter_best_line(dash.rm, dash.rb, dash.minry, m, b, minry, rate)
-    else:
-        (dash.rm, dash.rb, dash.minry) = (m, b, minry)
-    if (dash.rm != 0.0):
-        m = dash.rm
-        b = dash.rb
-        yy1 = img.shape[0]
-        d = dash.minry
-        if d < dash.minly:
-            d = dash.minly;
-        yy2 = int(img.shape[0]*.6)
-        xx1 = int((yy1-b)/m)
-        xx2 = int((yy2-b)/m)
-        #if (xx1 > 0) and (xx1 < img.shape[1]):
-        cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
-        dash.rtic += 1
+    if lines is not None:
+        for line in lines:
+            for x1,y1,x2,y2 in line:
+                if abs(x2-x1) > 0:
+                    m = (y2-y1)/(x2-x1)
+                    absm = abs(m)
+                    if (m > 0):
+                        if (absm > 0.25 and absm < 0.8):
+                            rx.append(x1)
+                            ry.append(y1)
+                            rx.append(x2)
+                            ry.append(y2)
+                            #cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
+                    else:
+                        if (absm > 0.25 and absm < 0.8):
+                            lx.append(x1)
+                            ly.append(y1)
+                            lx.append(x2)
+                            ly.append(y2)
+                            #cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
+        
+        # Fit, Filter and draw right lane
+        (dash.rm, dash.rb, dash.minry) = fit_filter_line(dash.rm, dash.rb, dash.minry, dash.rtic, rate, rx, ry)
+        #(m, b, minry) = get_best_line(dash.rm, dash.rb, dash.minry, dash.rtic, rx, ry)
+        #if dash.rtic > 0:
+        #    (dash.rm, dash.rb, dash.minry) = filter_best_line(dash.rm, dash.rb, dash.minry, m, b, minry, rate)
+        #else:
+        #    (dash.rm, dash.rb, dash.minry) = (m, b, minry)
+        if (dash.rm != 0.0):
+            m = dash.rm
+            b = dash.rb
+            yy1 = img.shape[0]
+            d = dash.minry
+            if d < dash.minly:
+                d = dash.minly;
+            yy2 = int(img.shape[0]*.62)
+            xx1 = int((yy1-b)/m)
+            xx2 = int((yy2-b)/m)
+            #if (xx1 > 0) and (xx1 < img.shape[1]):
+            cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
+            dash.rtic += 1
 
-    # Fit, Filter and draw left lane
-    #(dash.lm, dash.lb, dash.minly) = fit_filter_line(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
-    (m, b, minly) = get_best_line(dash.lm, dash.lb, dash.minly, dash.ltic, lx, ly)
-    if (dash.ltic > 0):
-        (dash.lm, dash.lb, dash.minly) = filter_best_line(dash.lm, dash.lb, dash.minly, m, b, minly, rate)
-    else:
-        (dash.lm, dash.lb, dash.minly) = (m, b, minly)
-#    print(dash.lm, dash.lb, dash.minly)
-    cv2.line
-    if (dash.lm != 0.0):
-        m = dash.lm
-        b = dash.lb
-        d = dash.minly
-        if d < dash.minry:
-            d = dash.minry;
-        yy1 = img.shape[0]
-        yy2 = int(img.shape[0]*.6)
-        xx1 = int((yy1-b)/m)
-        xx2 = int((yy2-b)/m)
-        #if (xx1 > 0) and (xx1 < img.shape[1]):
-        cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
-        dash.ltic += 1
+        # Fit, Filter and draw left lane
+        (dash.lm, dash.lb, dash.minly) = fit_filter_line(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
+        #(m, b, minly) = get_best_line(dash.lm, dash.lb, dash.minly, dash.ltic, lx, ly)
+        #if (dash.ltic > 0):
+        #    (dash.lm, dash.lb, dash.minly) = filter_best_line(dash.lm, dash.lb, dash.minly, m, b, minly, rate)
+        #else:
+        #    (dash.lm, dash.lb, dash.minly) = (m, b, minly)
+        if (dash.lm != 0.0):
+            m = dash.lm
+            b = dash.lb
+            d = dash.minly
+            if d < dash.minry:
+                d = dash.minry;
+            yy1 = img.shape[0]
+            yy2 = int(img.shape[0]*.62)
+            xx1 = int((yy1-b)/m)
+            xx2 = int((yy2-b)/m)
+            #if (xx1 > 0) and (xx1 < img.shape[1]):
+            cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
+            dash.ltic += 1
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
@@ -351,6 +350,45 @@ def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
     """
     return cv2.addWeighted(initial_img, α, img, β, λ)
 
+def process_image(image):
+
+    gray = grayscale(image)
+    
+    # Define a kernel size and apply Gaussian smoothing
+    kernel_size = 5
+    blur_gray = gaussian_blur(gray, kernel_size)
+
+    # Define our parameters for Canny and apply
+    low_threshold = 80
+    high_threshold = 2*low_threshold
+    edges = canny(blur_gray, low_threshold, high_threshold)
+
+    # Create a masked edges image
+    imshape = edges.shape
+    bias = 0.01
+    ylow = 0.63
+    xlowl = 0.42+bias
+    xlowr = 0.58+bias
+    yhigh = 0.9
+    xhighl = 0.1+bias
+    xhighr = 0.9+bias
+    vertices = np.array([[(imshape[1]*xhighl,imshape[0]* yhigh),(imshape[1]*xlowl, imshape[0]*ylow), (imshape[1]*xlowr, imshape[0]*ylow), (imshape[1]*xhighr,imshape[0]*yhigh)]], dtype=np.int32)
+    masked_edges = region_of_interest(edges, vertices)
+
+    # Detect Hough lines
+    rho = 1 # distance resolution in pixels of the Hough grid
+    theta = np.pi/180 # angular resolution in radians of the Hough grid
+    threshold = 1     # minimum number of votes (intersections in Hough grid cell)
+    min_line_length = 30 #minimum number of pixels making up a line
+    max_line_gap = 10    # maximum gap in pixels between connectable line segments
+    line_img = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
+
+    # Return weighted lane lines image
+    final_img = weighted_img(line_img, image)
+    #cv2.polylines(final_img, vertices, 1, [0, 0, 255], 2)
+
+    return final_img
+
 
 import os
 dirs = os.listdir("test_images/")
@@ -365,48 +403,11 @@ for filename in dirs:
 
     # Read in and grayscale the image
     image = mpimg.imread("test_images/" + filename)
-
-    gray = grayscale(image)
     dash = Dashboard()
-
-    # Define a kernel size and apply Gaussian smoothing
-    kernel_size = 5
-    blur_gray = gaussian_blur(gray, kernel_size)
-
-    # Define our parameters for Canny and apply
-    low_threshold = 50
-    high_threshold = 150
-    edges = canny(blur_gray, low_threshold, high_threshold)
-
-    # Create a masked edges image
-    imshape = edges.shape
-    #ylow = 0.625
-    #xlow1 = 0.48
-    #xlow2 = 0.53 
-    ylow = 0.6
-    xlow1 = 0.45
-    xlow2 = 0.58
-    vertices = np.array([[(0,imshape[0]),(imshape[1]*xlow1, imshape[0]*ylow), (imshape[1]*xlow2, imshape[0]*ylow), (imshape[1],imshape[0])]], dtype=np.int32)
-    masked_edges = region_of_interest(edges, vertices)
-
-    # Detect Hough lines
-    rho = 1 # distance resolution in pixels of the Hough grid
-    theta = np.pi/180 # angular resolution in radians of the Hough grid
-    threshold = 1     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 20 #30 #minimum number of pixels making up a line
-    max_line_gap = 10    # maximum gap in pixels between connectable line segments
-    line_img = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
-
-    # Save weighted lane lines image
-    final_img = weighted_img(line_img, image)
-
-    cv2.line(final_img, (0, imshape[0]), (int(imshape[1]*xlow1), int(imshape[0]*ylow)), [0, 0, 255], 2)
-    cv2.line(final_img, (int(imshape[1]*xlow2), int(imshape[0]*ylow)), (imshape[1],imshape[0]), [0, 0, 255], 2)
-
+    final_img = process_image(image)
+    
     mpimg.imsave("test_images_output/" + filename, final_img, format='jpg')
     plt.imshow(final_img)
-    #plt.show(block=True)
-
 
 #don't close the plot when running from command line
 #plt.show(block=True)
@@ -417,43 +418,6 @@ for filename in dirs:
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
-def process_image(image):
-
-    gray = grayscale(image)
-    
-    # Define a kernel size and apply Gaussian smoothing
-    kernel_size = 5
-    blur_gray = gaussian_blur(gray, kernel_size)
-
-    # Define our parameters for Canny and apply
-    low_threshold = 40
-    high_threshold = 160
-    edges = canny(blur_gray, low_threshold, high_threshold)
-
-    # Create a masked edges image
-    imshape = edges.shape
-    #ylow = 0.625
-    #xlow1 = 0.48
-    #xlow2 = 0.53 
-    ylow = 0.6
-    xlow1 = 0.43
-    xlow2 = 0.58
-    vertices = np.array([[(0,imshape[0]),(imshape[1]*xlow1, imshape[0]*ylow), (imshape[1]*xlow2, imshape[0]*ylow), (imshape[1],imshape[0])]], dtype=np.int32)
-    masked_edges = region_of_interest(edges, vertices)
-
-    # Detect Hough lines
-    rho = 1 # distance resolution in pixels of the Hough grid
-    theta = np.pi/180 # angular resolution in radians of the Hough grid
-    threshold = 1     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 30 #minimum number of pixels making up a line
-    max_line_gap = 10    # maximum gap in pixels between connectable line segments
-    line_img = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
-
-    # Return weighted lane lines image
-    final_img = weighted_img(line_img, image)
-    cv2.line(final_img, (0, imshape[0]), (int(imshape[1]*xlow1), int(imshape[0]*ylow)), [0, 0, 255], 2)
-    cv2.line(final_img, (int(imshape[1]*xlow2), int(imshape[0]*ylow)), (imshape[1],imshape[0]), [0, 0, 255], 2)
-    return final_img
 
 if 1:
     dash = Dashboard()
