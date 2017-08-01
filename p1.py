@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
-import random
 
 #%matplotlib inline
 #plt.ion()
@@ -12,14 +11,32 @@ import random
 class Dashboard:
     """ A place holder for the telemetry of the vehicle.
     Currently this contains a set of lane lines."""
+
+    # Left lane slope, y-intercept
     lm = 0.0
     lb = 0.0
+    
+    # Right lane slope, y-intercept
     rm = 0.0
     rb = 0.0
+    
+    # Lane extent
     minly = 0.0
     minry = 0.0
+    
+    # Odomter
     rtic = 0
     ltic = 0
+
+    # Area mask parameters
+    bias = 0.02
+    ylow = 0.60
+    xlowl = 0.44+bias
+    xlowr = 0.56+bias
+    yhigh = 0.92
+    xhighl = 0.12+bias
+    xhighr = 0.88+bias
+    
 
 # Global static dashboard
 dash = Dashboard()
@@ -100,23 +117,12 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
 
 def draw_fitted_lines(img, lines, color=[255, 0, 0], thickness=10):
     """
-    NOTE: this is the function you might want to use as a starting point once you want to
-    average/extrapolate the line segments you detect to map out the full
-    extent of the lane (going from the result shown in raw-lines-example.mp4
-    to that shown in P1_example.mp4).  
-    
-    Think about things like separating line segments by their 
-    slope ((y2-y1)/(x2-x1)) to decide which segments are part of the left
-    line vs. the right line.  Then, you can average the position of each of 
-    the lines and extrapolate to the top and bottom of the lane.
-    
-    This function draws `lines` with `color` and `thickness`.    
+    This function fits the best line to the left and right lane then
+    draws the fitted lines with `color` and `thickness`.    
     Lines are drawn on the image inplace (mutates the image).
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
-    #right_lines = []
-    #left_lines = []
     rx = []
     ry = []
     lx = []
@@ -124,22 +130,17 @@ def draw_fitted_lines(img, lines, color=[255, 0, 0], thickness=10):
     for line in lines:
         for x1,y1,x2,y2 in line:
             if ((y2-y1)/(x2-x1) > 0):
-                #right_lines.append(line)
                 rx.append(x1)
                 ry.append(y1)
                 rx.append(x2)
                 ry.append(y2)
             else:
-                #left_lines.append(line)
                 lx.append(x1)
                 ly.append(y1)
                 lx.append(x2)
                 ly.append(y2)
             cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
     
-    #right_lines = np.array(right_lines)
-    #left_lines = np.array(left_lines)
-
     # Fit and draw right lane
     if len(rx) > 2:
         rz = np.polyfit(rx,ry,1)
@@ -149,7 +150,6 @@ def draw_fitted_lines(img, lines, color=[255, 0, 0], thickness=10):
         yy2 = min(ry)
         xx1 = int((yy1-b)/m)
         xx2 = int((yy2-b)/m)
-        #if (xx1 > 0) and (xx1 < img.shape[1]):
         cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
 
     # Fit and draw left lane
@@ -161,7 +161,6 @@ def draw_fitted_lines(img, lines, color=[255, 0, 0], thickness=10):
         yy2 = min(ly)
         xx1 = int((yy1-b)/m)
         xx2 = int((yy2-b)/m)
-        #if (xx1 > 0) and (xx1 < img.shape[1]):
         cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
 
 def dist_point_line(x1, y1, x2, y2, px, py):
@@ -170,12 +169,10 @@ def dist_point_line(x1, y1, x2, y2, px, py):
 def line_sse(x1, y1, x2, y2, points_x, points_y):
     zipped = zip(points_x, points_y)
     sse = 0.0
-    random.seed()
     i = 0
     for x, y in zipped:
-        if (random.randint(0,4) < 4):
-            sse += pow(dist_point_line(x1, y1, x2, y2, x, y), 2.0)
-            i += 1
+        sse += pow(dist_point_line(x1, y1, x2, y2, x, y), 2.0)
+        i += 1
     if (i == 0):
         i = 1
     return sse/i
@@ -218,7 +215,7 @@ def filter_best_line(m, b, miny, nm, nb, nminy, rate):
     miny = miny * (1.0-rate/3) + nminy * rate/3
     return (m, b, miny)
 
-def fit_filter_line(m, b, miny, tic, rate, points_x, points_y):
+def fit_filter_line_ls(m, b, miny, tic, rate, points_x, points_y):
     """
     Fit a line using least squares and low pass filter the result.
     Returns the new slope (m), y-intercept (b), and draw height (miny).
@@ -232,28 +229,73 @@ def fit_filter_line(m, b, miny, tic, rate, points_x, points_y):
         else:
             m = m * (1.0-rate) + z[0] * rate
             b = b * (1.0-rate) + z[1] * rate
-            miny = min(points_y)#miny * (1.0-rate) +  min(points_y) * rate
+            miny = miny * (1.0-rate) +  min(points_y) * rate
     elif (tic == 0):
         return (0.0, 0.0, 0.0)
+    return (m, b, miny)
+
+def fit_filter_line_avg(m, b, miny, tic, rate, points_x, points_y):
+    """
+    Fit a line by averaging the start points and end points and finally performing a low pass filter with the given 'rate'.
+    Returns the new slope (m), y-intercept (b), and draw height (miny).
+    """
+    if len(points_x) >= 2:
+        x1 = 0;
+        x2 = 0;
+        y1 = 0;
+        y2 = 0;
+        
+        # Average x1 
+        s = 0;
+        for i in range(0,len(points_x),2):
+            x1 += points_x[i]
+            s += 1
+        x1 /= s
+
+        # Average x2 
+        s=0
+        for i in range(1,len(points_x),2):
+            x2 += points_x[i]
+            s += 1
+        x2 /= s;
+
+        # Average y1 
+        s=0
+        for i in range(0,len(points_y),2):
+            y1 += points_y[i]
+            s += 1
+        y1 /= s
+
+        # Average y2 
+        s=0
+        for i in range(1,len(points_y),2):
+            y2 += points_y[i]
+            s += 1
+        y2 /= s
+
+        m1= (y2-y1)/(x2-x1)
+        b1 = (y1 - m1 * x1)
+
+        if (tic == 0):
+            m = m1
+            b = b1
+            miny = min(points_y)
+        else:
+            m = m * (1.0-rate) + m1 * rate
+            b = b * (1.0-rate) + b1 * rate
+            miny = miny * (1.0-rate) +  min(points_y) * rate
+
+    elif (tic == 0):
+        return (0.0, 0.0, 0.0)
+
     return (m, b, miny)
 
 
 def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
     """
-    NOTE: this is the function you might want to use as a starting point once you want to
-    average/extrapolate the line segments you detect to map out the full
-    extent of the lane (going from the result shown in raw-lines-example.mp4
-    to that shown in P1_example.mp4).  
-    
-    Think about things like separating line segments by their 
-    slope ((y2-y1)/(x2-x1)) to decide which segments are part of the left
-    line vs. the right line.  Then, you can average the position of each of 
-    the lines and extrapolate to the top and bottom of the lane.
-    
-    This function draws `lines` with `color` and `thickness`.    
+    Given a set of 'lines', this function will fit them into two lanes and perform a 
+    low pass filter before drawing them with with `color` and `thickness`.
     Lines are drawn on the image inplace (mutates the image).
-    If you want to make the lines semi-transparent, think about combining
-    this function with the weighted_img() function below
     """
     rate = 0.1 # The filter rate
     rx = []
@@ -267,22 +309,26 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
                     m = (y2-y1)/(x2-x1)
                     absm = abs(m)
                     if (m > 0):
-                        if (absm > 0.25 and absm < 0.8):
-                            rx.append(x1)
-                            ry.append(y1)
-                            rx.append(x2)
-                            ry.append(y2)
-                            #cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
+                        if (absm > 0.4 and absm < 0.8):
+                            if (min([x1,x2]) > img.shape[1]*.5):
+                                rx.append(x1)
+                                ry.append(y1)
+                                rx.append(x2)
+                                ry.append(y2)
+                                # Uncomment to draw all inlier right lane lines
+                                cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
                     else:
-                        if (absm > 0.25 and absm < 0.8):
-                            lx.append(x1)
-                            ly.append(y1)
-                            lx.append(x2)
-                            ly.append(y2)
-                            #cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
+                        if (absm > 0.4 and absm < 0.8):
+                            if (max([x1,x2]) <= img.shape[1]*.5):
+                                lx.append(x1)
+                                ly.append(y1)
+                                lx.append(x2)
+                                ly.append(y2)
+                                # Uncomment to draw all inlier left lane lines
+                                cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], 2)
         
         # Fit, Filter and draw right lane
-        (dash.rm, dash.rb, dash.minry) = fit_filter_line(dash.rm, dash.rb, dash.minry, dash.rtic, rate, rx, ry)
+        (dash.rm, dash.rb, dash.minry) = fit_filter_line_avg(dash.rm, dash.rb, dash.minry, dash.rtic, rate, rx, ry)
         #(m, b, minry) = get_best_line(dash.rm, dash.rb, dash.minry, dash.rtic, rx, ry)
         #if dash.rtic > 0:
         #    (dash.rm, dash.rb, dash.minry) = filter_best_line(dash.rm, dash.rb, dash.minry, m, b, minry, rate)
@@ -292,18 +338,21 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
             m = dash.rm
             b = dash.rb
             yy1 = img.shape[0]
-            d = dash.minry
-            if d < dash.minly:
-                d = dash.minly;
-            yy2 = int(img.shape[0]*.62)
+            
+            # Uncomment to filter line extent
+            #d = dash.minry
+            #if d < dash.minly:
+            #    d = dash.minly
+            #yy2 = int(d)
+
+            yy2 = int(img.shape[0]*dash.ylow)
             xx1 = int((yy1-b)/m)
             xx2 = int((yy2-b)/m)
-            #if (xx1 > 0) and (xx1 < img.shape[1]):
             cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
             dash.rtic += 1
 
         # Fit, Filter and draw left lane
-        (dash.lm, dash.lb, dash.minly) = fit_filter_line(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
+        (dash.lm, dash.lb, dash.minly) = fit_filter_line_avg(dash.lm, dash.lb, dash.minly, dash.ltic, rate, lx, ly)
         #(m, b, minly) = get_best_line(dash.lm, dash.lb, dash.minly, dash.ltic, lx, ly)
         #if (dash.ltic > 0):
         #    (dash.lm, dash.lb, dash.minly) = filter_best_line(dash.lm, dash.lb, dash.minly, m, b, minly, rate)
@@ -312,14 +361,17 @@ def draw_filtered_lines(img, lines, color=[255, 0, 0], thickness=10):
         if (dash.lm != 0.0):
             m = dash.lm
             b = dash.lb
-            d = dash.minly
-            if d < dash.minry:
-                d = dash.minry;
             yy1 = img.shape[0]
-            yy2 = int(img.shape[0]*.62)
+
+            # Uncomment to filter line extent
+            #d = dash.minly
+            #if d < dash.minry:
+            #    d = dash.minry;
+            #yy2 = int(d)
+
+            yy2 = int(img.shape[0]*dash.ylow)
             xx1 = int((yy1-b)/m)
             xx2 = int((yy2-b)/m)
-            #if (xx1 > 0) and (xx1 < img.shape[1]):
             cv2.line(img, (xx1, yy1), (xx2, yy2), color, thickness)
             dash.ltic += 1
 
@@ -365,27 +417,22 @@ def process_image(image):
 
     # Create a masked edges image
     imshape = edges.shape
-    bias = 0.01
-    ylow = 0.63
-    xlowl = 0.42+bias
-    xlowr = 0.58+bias
-    yhigh = 0.9
-    xhighl = 0.1+bias
-    xhighr = 0.9+bias
-    vertices = np.array([[(imshape[1]*xhighl,imshape[0]* yhigh),(imshape[1]*xlowl, imshape[0]*ylow), (imshape[1]*xlowr, imshape[0]*ylow), (imshape[1]*xhighr,imshape[0]*yhigh)]], dtype=np.int32)
+
+    vertices = np.array([[(imshape[1]*dash.xhighl,imshape[0]* dash.yhigh),(imshape[1]*dash.xlowl, imshape[0]*dash.ylow), (imshape[1]*dash.xlowr, imshape[0]*dash.ylow), (imshape[1]*dash.xhighr,imshape[0]*dash.yhigh)]], dtype=np.int32)
     masked_edges = region_of_interest(edges, vertices)
 
     # Detect Hough lines
     rho = 1 # distance resolution in pixels of the Hough grid
     theta = np.pi/180 # angular resolution in radians of the Hough grid
     threshold = 1     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 30 #minimum number of pixels making up a line
-    max_line_gap = 10    # maximum gap in pixels between connectable line segments
+    min_line_length = 100 #minimum number of pixels making up a line
+    max_line_gap = 100    # maximum gap in pixels between connectable line segments
     line_img = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
 
     # Return weighted lane lines image
     final_img = weighted_img(line_img, image)
-    #cv2.polylines(final_img, vertices, 1, [0, 0, 255], 2)
+    # Uncomment to draw the hough mask
+    cv2.polylines(final_img, vertices, 1, [0, 0, 255], 2)
 
     return final_img
 
@@ -420,7 +467,6 @@ from IPython.display import HTML
 
 
 if 1:
-    dash = Dashboard()
     white_output = 'test_videos_output/challenge.mp4'
     ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
     ## To do so add .subclip(start_second,end_second) to the end of the line below
@@ -428,20 +474,21 @@ if 1:
     ## You may also uncomment the following line for a subclip of the first 5 seconds
     ##clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
     clip1 = VideoFileClip("test_videos/challenge.mp4")
+    dash = Dashboard()
     white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
     #%time white_clip.write_videofile(white_output, audio=False)
     white_clip.write_videofile(white_output, audio=False)
 
 if 1:
-    dash = Dashboard()
     white_output = 'test_videos_output/solidYellowLeft.mp4'
     clip1 = VideoFileClip("test_videos/solidYellowLeft.mp4")
+    dash = Dashboard()
     white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
     white_clip.write_videofile(white_output, audio=False)
 
 if 1:
-    dash = Dashboard()
     white_output = 'test_videos_output/solidWhiteRight.mp4'
     clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
+    dash = Dashboard()
     white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
     white_clip.write_videofile(white_output, audio=False)
