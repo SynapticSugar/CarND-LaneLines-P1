@@ -33,11 +33,11 @@ The basic lane finding pipeline consisted of 5 steps. First the image was conver
 
 	2. Gaussian Smoothing
 		
-		Applying a 5x5 Gaussian kernel to the image will remove noise and puts a lower bound on the size of features that contribute to the line detection algorithm. For busy sceens, this removes clutter from the Hough lines **transform**making it easier to pick out the lane lines.
+		Applying a 5x5 Gaussian kernel to the image will remove noise and puts a lower bound on the size of features that contribute to the line detection algorithm. For busy sceens, this removes clutter from the Hough lines transform making it easier to pick out the lane lines.
 	
 	3. Area Mask
 
-		Applying the area mask helps remove lines that would otherwise be detected in the areas of the image we know lane lines would not exist.  For example, lane lines would not exist above the horizon or they would be in the air and we are not driving a hover craft, so it makes sense to block those out.  A level camera would generally have the horizon at about 50% **of** the height of the image, assuming the ground is generally flat and level. The same can be said for the road way itself.  Since the road is generally a set of parallel lines that disapear into the horizon or "vanishing point", we generally have a mask that looks like a pyramid where the left and right sides are angled inward. As we get close to the vanishing point, the lane lines start to blur together and even warp or bend.  The area mask cuts the top off the pyramid in this area as it may lead to inaccuracies in line detection. In the challenging video case, it also became necessarry to mask off the hood of the car at the bottom of the image, as it would introduce false line detections.
+		Applying the area mask helps remove lines that would otherwise be detected in the areas of the image we know lane lines would not exist.  For example, lane lines would not exist above the horizon or they would be in the air and we are not driving a hover craft, so it makes sense to block those out.  A level camera would generally have the horizon at about 50% of the height of the image, assuming the ground is generally flat and level. The same can be said for the road way itself.  Since the road is generally a set of parallel lines that disapear into the horizon or "vanishing point", we generally have a mask that looks like a pyramid where the left and right sides are angled inward. As we get close to the vanishing point, the lane lines start to blur together and even warp or bend.  The area mask cuts the top off the pyramid in this area as it may lead to inaccuracies in line detection. In the challenging video case, it also became necessarry to mask off the hood of the car at the bottom of the image, as it would introduce false line detections.
 
 2. Hough Lines Detection
 
@@ -92,7 +92,7 @@ Possible improvements to the pipeline are listed below.
 
 3. Dynamic thresholding
 
-	Light and shadow can **to some degree** be mittigated by performing a threshold based in the local neighbourhood of intensity values. The drawback **to this** would be added complexity and computation time. 
+	Light and shadow can to some degree be mittigated by performing a threshold based in the local neighbourhood of intensity values. The drawback to this would be added complexity and computation time. 
 	OpenCV  adaptiveThreshold(): http://docs.opencv.org/3.2.0/d7/d1b/group__imgproc__misc.html#ga72b913f352e4a1b1b397736707afcde3
 
 4. Multiple area masks
